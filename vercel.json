@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "buildCommand": "npm run build",
+  "buildCommand": "prisma generate && npm run build",
   "installCommand": "npm install",
   "framework": "nextjs",
   "env": {
@@ -10,5 +10,16 @@
     "env": {
       "DATABASE_URL": "@database-url"
     }
-  }
+  },
+  "builds": [
+    {
+      "src": "package.json",
+      "use": "@vercel/node",
+      "config": {
+        "prisma": {
+          "generate": true
+        }
+      }
+    }
+  ]
 }
