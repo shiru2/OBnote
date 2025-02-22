@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "buildCommand": "npm run build",
+  "installCommand": "npm install",
+  "framework": "nextjs",
+  "env": {
+    "DATABASE_URL": "@database-url"
+  },
+  "build": {
+    "env": {
+      "DATABASE_URL": "@database-url"
+    }
+  }
+}

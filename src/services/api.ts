@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { Note, LLMResponse } from '@/types';
+import { Note } from '@/types';
 
 const api = axios.create({
   baseURL: '/api',
@@ -31,13 +31,6 @@ export const NotesAPI = {
 
   async deleteNote(id: string): Promise<void> {
     await api.delete(`/notes?id=${id}`);
-  },
-};
-
-export const LLMAPI = {
-  async analyzeContent(content: string): Promise<LLMResponse> {
-    const response = await api.post<LLMResponse>('/llm', { content });
-    return response.data;
   },
 };
 

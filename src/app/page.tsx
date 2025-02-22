@@ -1,16 +1,15 @@
 'use client';
 
 import { useState, useCallback, useEffect } from 'react';
-import { NotesAPI, LLMAPI } from '@/services/api';
+import { NotesAPI } from '@/services/api';
 import { Box, Grid } from '@mui/material';
 import GraphDisplay from '@/components/GraphDisplay';
 import NoteEditor from '@/components/NoteEditor';
 import SidePanel from '@/components/SidePanel';
-import { Note, GraphData, LLMResponse } from '@/types';
+import { Note, GraphData } from '@/types';
 
 export default function Home() {
   const [selectedNote, setSelectedNote] = useState<Note | undefined>();
-  const [llmResponse, setLLMResponse] = useState<LLMResponse | undefined>();
   const [graphData, setGraphData] = useState<GraphData>({ nodes: [], links: [] });
 
   // Fetch all notes and create graph data with tag-based connections
@@ -59,9 +58,6 @@ export default function Home() {
       const note = await NotesAPI.getNote(nodeId);
       setSelectedNote(note);
 
-      // Get LLM analysis for the note
-      const analysis = await LLMAPI.analyzeContent(note.content);
-      setLLMResponse(analysis);
     } catch (error) {
       console.error('Failed to fetch note details:', error);
     }
@@ -117,17 +113,6 @@ export default function Home() {
     }
   }, []);
 
-  const handleAddSuggestion = useCallback((suggestion: string) => {
-    if (selectedNote) {
-      const updatedNote = {
-        ...selectedNote,
-        content: `${selectedNote.content}\n\n${suggestion}`,
-        updatedAt: new Date().toISOString(),
-      };
-      handleSaveNote(updatedNote);
-    }
-  }, [selectedNote, handleSaveNote]);
-
   return (
     <Box className="h-screen p-4 bg-gray-50">
       <Grid container spacing={2} className="h-full">
@@ -156,8 +141,6 @@ export default function Home() {
             <Box className="flex-1 bg-white rounded-lg shadow-md overflow-hidden">
               <SidePanel
                 note={selectedNote}
-                llmResponse={llmResponse}
-                onAddSuggestion={handleAddSuggestion}
               />
             </Box>
           </Box>

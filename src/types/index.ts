@@ -23,12 +23,6 @@ export interface GraphData {
   links: Array<Link>;
 }
 
-export interface LLMResponse {
-  summary: string;
-  keywords: string[];
-  suggestions: string[];
-}
-
 export interface User {
   id: string;
   email: string;
