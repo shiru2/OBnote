@@ -1,101 +1,168 @@
-import Image from "next/image";
+'use client';
+
+import { useState, useCallback, useEffect } from 'react';
+import { NotesAPI, LLMAPI } from '@/services/api';
+import { Box, Grid } from '@mui/material';
+import GraphDisplay from '@/components/GraphDisplay';
+import NoteEditor from '@/components/NoteEditor';
+import SidePanel from '@/components/SidePanel';
+import { Note, GraphData, LLMResponse } from '@/types';
 
 export default function Home() {
-  return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-8 row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-semibold">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li>Save and see your changes instantly.</li>
-        </ol>
+  const [selectedNote, setSelectedNote] = useState<Note | undefined>();
+  const [llmResponse, setLLMResponse] = useState<LLMResponse | undefined>();
+  const [graphData, setGraphData] = useState<GraphData>({ nodes: [], links: [] });
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
+  // Fetch all notes and create graph data with tag-based connections
+  useEffect(() => {
+    const fetchNotes = async () => {
+      try {
+        const notes = await NotesAPI.getAllNotes();
+        
+        // Convert notes to nodes
+        const nodes = notes.map(note => ({
+          id: note.id,
+          title: note.title,
+          tags: note.tags,
+        }));
+
+        // Create links between notes that share tags
+        const links: Array<{ source: string; target: string; weight: number }> = [];
+        for (let i = 0; i < notes.length; i++) {
+          for (let j = i + 1; j < notes.length; j++) {
+            const sharedTags = notes[i].tags.filter(tag => 
+              notes[j].tags.includes(tag)
+            );
+            
+            if (sharedTags.length > 0) {
+              links.push({
+                source: notes[i].id,
+                target: notes[j].id,
+                // Weight is based on number of shared tags
+                weight: sharedTags.length,
+              });
+            }
+          }
+        }
+
+        setGraphData({ nodes, links });
+      } catch (error) {
+        console.error('Failed to fetch notes:', error);
+      }
+    };
+
+    fetchNotes();
+  }, []);
+
+  const handleNodeClick = useCallback(async (nodeId: string) => {
+    try {
+      const note = await NotesAPI.getNote(nodeId);
+      setSelectedNote(note);
+
+      // Get LLM analysis for the note
+      const analysis = await LLMAPI.analyzeContent(note.content);
+      setLLMResponse(analysis);
+    } catch (error) {
+      console.error('Failed to fetch note details:', error);
+    }
+  }, []);
+
+  const handleSaveNote = useCallback(async (note: Partial<Note>) => {
+    try {
+      let savedNote;
+      if (note.id) {
+        savedNote = await NotesAPI.updateNote(note.id, note);
+      } else {
+        savedNote = await NotesAPI.createNote(note);
+      }
+
+      // Update graph data with new/updated note and its connections
+      setGraphData(prev => {
+        // Update nodes
+        const nodes = prev.nodes.filter(n => n.id !== savedNote.id);
+        nodes.push({
+          id: savedNote.id,
+          title: savedNote.title,
+          tags: savedNote.tags,
+        });
+
+        // Remove old links connected to this note
+        const links = prev.links.filter(
+          link => link.source !== savedNote.id && link.target !== savedNote.id
+        );
+
+        // Create new links based on shared tags
+        nodes.forEach(node => {
+          if (node.id !== savedNote.id) {
+            const sharedTags = savedNote.tags.filter(tag =>
+              node.tags.includes(tag)
+            );
+            
+            if (sharedTags.length > 0) {
+              links.push({
+                source: savedNote.id,
+                target: node.id,
+                weight: sharedTags.length,
+              });
+            }
+          }
+        });
+
+        return { nodes, links };
+      });
+
+      setSelectedNote(savedNote);
+    } catch (error) {
+      console.error('Failed to save note:', error);
+    }
+  }, []);
+
+  const handleAddSuggestion = useCallback((suggestion: string) => {
+    if (selectedNote) {
+      const updatedNote = {
+        ...selectedNote,
+        content: `${selectedNote.content}\n\n${suggestion}`,
+        updatedAt: new Date().toISOString(),
+      };
+      handleSaveNote(updatedNote);
+    }
+  }, [selectedNote, handleSaveNote]);
+
+  return (
+    <Box className="h-screen p-4 bg-gray-50">
+      <Grid container spacing={2} className="h-full">
+        {/* Graph Visualization */}
+        <Grid item xs={12} md={8} className="h-full">
+          <Box className="h-full bg-white rounded-lg shadow-md overflow-hidden">
+            <GraphDisplay
+              data={graphData}
+              onNodeClick={handleNodeClick}
             />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:min-w-44"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
-        </div>
-      </main>
-      <footer className="row-start-3 flex gap-6 flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
-    </div>
+          </Box>
+        </Grid>
+
+        {/* Right Panel */}
+        <Grid item xs={12} md={4} className="h-full">
+          <Box className="h-full flex flex-col gap-4">
+            {/* Note Editor */}
+            <Box className="flex-1 bg-white rounded-lg shadow-md overflow-hidden">
+              <NoteEditor
+                note={selectedNote}
+                onSave={handleSaveNote}
+              />
+            </Box>
+
+            {/* Side Panel */}
+            <Box className="flex-1 bg-white rounded-lg shadow-md overflow-hidden">
+              <SidePanel
+                note={selectedNote}
+                llmResponse={llmResponse}
+                onAddSuggestion={handleAddSuggestion}
+              />
+            </Box>
+          </Box>
+        </Grid>
+      </Grid>
+    </Box>
   );
 }
